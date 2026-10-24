@@ -4,13 +4,13 @@ import moteus
 
 MAX_VELOCITY_REV_S = 10.0
 MAX_BOARD_TEMP_C = 65.0
-MAX_TORQUE_NM = 0.5
+MAX_TORQUE_NM = 1.2
 
 async def main():
     c = moteus.Controller(id=1)
     await c.set_stop()
 
-    target_torque = 0.2
+    target_torque = 0.7
     hold_sec = 5.0
     hz = 100
 
