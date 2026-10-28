@@ -19,25 +19,36 @@ class Worker(QObject):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("QThread Best Practice")
-        self.resize(300, 150)
+        self.setWindowTitle("PID Calibration Tool")
 
         # Layout & Widgets
         layout = QVBoxLayout()
-        self.label = QLabel("Thread is idle.", self)
-        self.button = QPushButton("Start Heavy Task", self)
-        self.button.clicked.connect(self.start_background_task)
-        
-        layout.addWidget(self.label)
-        layout.addWidget(self.button)
+
+        self.kpLabel = QLabel("Kp: ")
+        self.kdLabel = QLabel("Kd: ")
+        self.kiLabel = QLabel("Ki: ")
+        self.kpButton = QPushButton("Begin kp Calibration...", self)
+        self.kpButton.clicked.connect(self.startKpCalibration)
+        self.kdButton = QPushButton("Begin ki Calibration...", self)
+        self.kdButton.clicked.connect(self.startKdCalibration)
+        self.kiButton = QPushButton("Begin kd Calibration...", self)
+        self.kiButton.clicked.connect(self.startKiCalibration)
+
+        layout.addWidget(self.kpLabel)
+        layout.addWidget(self.kdLabel)
+        layout.addWidget(self.kiLabel)
+        layout.addWidget(self.kpButton)
+        layout.addWidget(self.kdButton)
+        layout.addWidget(self.kiButton)
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-    def start_background_task(self):
+    def startKpCalibration(self):
         # Disable button so user doesn't click it twice
-        self.button.setEnabled(False)
-        self.label.setText("Task running...")
+        self.kpButton.setEnabled(False)
+        self.kdButton.setEnabled(False)
+        self.kiButton.setEnabled(False)
 
         # Step 1: Create the QThread and Worker instances
         self.thread = QThread()
@@ -62,15 +73,22 @@ class MainWindow(QMainWindow):
         # Step 5: Start the thread
         self.thread.start()
 
+    def startKdCalibration(self):
+        pass   
+    def startKiCalibration(self):
+        pass
+
     def update_ui_progress(self, value):
         """Safely updates the GUI from data sent by the worker thread."""
-        self.label.setText(True and f"Progress: {value}%")
+        self.kpLabel.setText(True and f"Kp: {value}%")
 
     def task_complete(self):
         """Cleans up the UI state when the thread finishes entirely."""
-        self.label.setText("Task completed successfully!")
-        self.button.setEnabled(True)
-
+        self.kpLabel.setText("Kp saved!")
+        self.kpButton.setEnabled(True)
+        self.kdButton.setEnabled(True)
+        self.kdButton.setEnabled(True)
+    
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
