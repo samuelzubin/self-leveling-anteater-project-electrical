@@ -7,19 +7,21 @@ MOTOR_ID = 1
 MAX_VELOCITY_REV_S = 2.5
 MAX_BOARD_TEMP_C = 65.0
 MAX_TORQUE_NM = 1.0
-MAX_DISPLACEMENT_REV = 0.5  # How far the motor may go from the hold position
+MAX_DISPLACEMENT_REV = 1.0  # How far the motor may go from the hold position
 
 # Search range for each gain (servo.pid_position.<name>)
 GAIN_LIMITS = {
     "kp": (0.0, 20.0),
-    "ki": (0.0, 5.0),
+    "ki": (0.0, 0.2),
     "kd": (0.0, 2.0),
 }
 # Which way the gain should move when the motor overshoots. Too much p or i
 # causes overshoot, while more d damps it.
 OVERSHOOT_LOWERS_GAIN = {"kp": True, "ki": True, "kd": False}
 TUNE_ORDER = ["kp", "kd", "ki"]
-ROUNDS_PER_GAIN = 6
+
+# Answers to the overshoot prompt
+OVERSHOOT, UNDERSHOOT, GOOD = 0, 1, 2
 
 HZ = 100
 MAX_MISSED_REPLIES = 5
@@ -28,6 +30,9 @@ MAX_MISSED_REPLIES = 5
 async def main():
     c = moteus.Controller(id=MOTOR_ID)
     stream = moteus.Stream(c)
+    await stream.write_message(b'tel stop')
+    await stream.flush_read()
+
     await c.set_stop()
 
     original = {name: await get_gain(stream, name) for name in GAIN_LIMITS}
@@ -46,19 +51,20 @@ async def main():
             lo, hi = GAIN_LIMITS[name]
             print(f"\n--- Tuning {name} ---")
 
-            for _ in range(ROUNDS_PER_GAIN):
+            # Keep narrowing the range until the user accepts the current value
+            while True:
                 gains[name] = (lo + hi) / 2
                 await set_gain(stream, name, gains[name])
                 print(f"Now using: {format_gains(gains)}")
 
-                overshot = await ask_overshoot(hold)
-                if overshot == OVERSHOOT_LOWERS_GAIN[name]:
+                answer = await ask_overshoot(hold)
+                if answer == GOOD:
+                    print(f"Keeping {name}={gains[name]:.4g}")
+                    break
+                if (answer == OVERSHOOT) == OVERSHOOT_LOWERS_GAIN[name]:
                     hi = gains[name]
                 else:
                     lo = gains[name]
-
-            gains[name] = (lo + hi) / 2
-            await set_gain(stream, name, gains[name])
 
         print(f"\nFinal gains: {format_gains(gains)}")
         save = await ask_yes_no("Save to the controller's flash? (y/n): ", hold)
@@ -124,12 +130,15 @@ def check_limits(result, hold_pos):
 
 
 async def get_gain(stream, name):
-    reply = await stream.command(f"conf get servo.pid_position.{name}".encode())
-    return float(reply.decode().strip())
+    print("Setup motor before")
+    name = str(name).encode()
+    command_str = b'conf get servo.pid_position.' + name
+    reply = float((await stream.command(command_str, allow_any_response=True)).decode())
+    return reply
 
 
 async def set_gain(stream, name, value):
-    await stream.command(f"conf set servo.pid_position.{name} {value:.6g}".encode())
+    await stream.command(f'conf set servo.pid_position.{name} {value:.6g}'.encode())
 
 
 def format_gains(gains):
@@ -138,9 +147,13 @@ def format_gains(gains):
 
 async def ask_overshoot(hold):
     while True:
-        answer = await ask("Pull the motor back and release. Did it overshoot (0) or undershoot (1): ", hold)
-        if answer in ("0", "1"):
-            return answer == "0"
+        answer = await ask(
+            "Pull the motor back and release. Did it overshoot (0), undershoot (1), "
+            "or is it good as is (2): ",
+            hold,
+        )
+        if answer in ("0", "1", "2"):
+            return int(answer)
 
 
 async def ask_yes_no(prompt, hold):
